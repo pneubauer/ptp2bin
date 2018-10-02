@@ -9,7 +9,7 @@
 #include <string>
 #include <cstdint>
 
-int readOne(std::ifstream& input, std::ofstream& output, uint16_t start, uint16_t lengthLimit)
+uint16_t readOne(std::ifstream& input, std::ofstream& output, uint16_t start, uint16_t lengthLimit, uint16_t& written)
 {
     // Scan for the line-starting delimiter.
     char delimit = ' ';
@@ -30,6 +30,7 @@ int readOne(std::ifstream& input, std::ofstream& output, uint16_t start, uint16_
     
     // Process each byte of data.
     //std::cout << std::hex << std::uppercase << std::setw(4) << addr << ":";
+    written = 0;
     for (int i = 0; i < length; i++)
     {
         std::string dataHex;
@@ -44,6 +45,7 @@ int readOne(std::ifstream& input, std::ofstream& output, uint16_t start, uint16_
             // Otherwise, write the data.  Beware that the PTP file may not be contiguous or in order.
             output.seekp(addr - start);
             output.write((const char*)&data, 1);
+            written++;
         }
         addr++;
     }
@@ -86,20 +88,29 @@ int main(int argc, char* argv[])
     std::ofstream output(outputFile, std::ios::binary | std::ios::out | std::ios::trunc);
     
     // Force the file to the user-specified length.
-    output.seekp(lengthLimit);
+    char fill = '\0';
+    for (int i = 0; i < lengthLimit; i++)
+        output.write(&fill, 1);
     output.seekp(0);
 
     // Process each line of the input PTP file.  The file ends with a record containing a byte count of 0.
-    uint16_t totalLength = 0, recordLength;
+    uint16_t totalLength = 0, recordLength, totalWritten = 0;
     do
     {
-        recordLength = readOne(input, output, start, lengthLimit);
+        uint16_t written = 0;
+        
+        recordLength = readOne(input, output, start, lengthLimit, written);
+        
         totalLength += recordLength;
+        totalWritten += written;
     } while (recordLength > 0);
     
     // Print summaries.
-    std::cout << "Translated " << std::hex << totalLength << " bytes." << std::endl;
-    std::cout << "start=0x" << std::hex << std::setw(4) << start << " length=0x" << std::hex << std::setw(4) << lengthLimit << std::endl;
+    std::cout << "Read " << std::hex << totalLength << " bytes.  ";
+    std::cout << "Output " << std::hex << totalWritten << " bytes.  ";
+    std::cout << "(start=0x" << std::hex << std::setw(4) << start
+        << " end=0x" << std::hex << std::setw(4) << (start + lengthLimit)
+        << " length=0x" << std::hex << std::setw(4) << lengthLimit << ")" << std::endl;
     
 	return 0;
 }
